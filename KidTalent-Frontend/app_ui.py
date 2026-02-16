@@ -10,7 +10,7 @@ st.write("Chào bạn nhỏ! Hãy kể cho Thám tử nghe về sở thích củ
 
 # 2. Kết nối với Backend (QUAN TRỌNG)
 # Đây là địa chỉ của cái "Hộp Docker" bạn đã chạy hôm qua
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000/chat")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://0.0.0.0:8000/chat")
 
 # 3. Quản lý Lịch sử Chat & Session ID
 if "session_id" not in st.session_state:
