@@ -66,6 +66,9 @@ chain_with_history = RunnableWithMessageHistory(
 # 6. API Backend
 app = FastAPI(title="KidTalent AI - Có Trí Nhớ")
 
+@app.get("/")
+def read_root():
+    return {"message": "KidTalent Backend is running!", "status": "ok"}
 
 # Cập nhật Data Model: Thêm session_id
 class ChatRequest(BaseModel):
