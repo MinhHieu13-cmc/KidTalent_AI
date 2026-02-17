@@ -99,7 +99,28 @@ with st.sidebar:
 
                         st.info(f"**💡 Lời khuyên:** {data['advice_for_parents']}")
 
-                        # (Ngày mai chúng ta sẽ làm nút tải PDF ở đây)
+                        # --- [NEW] NÚT TẢI PDF ---
+                        st.markdown("---")
+                        st.write("📥 **Lưu trữ hồ sơ:**")
+
+                        # Logic: Frontend gọi API /report -> Nhận file binary -> Tạo nút download
+                        REPORT_URL = f"{BASE_URL}/report"
+
+                        try:
+                            pdf_response = requests.post(REPORT_URL, json=payload)
+
+                            if pdf_response.status_code == 200 and "application/pdf" in pdf_response.headers.get("Content-Type", ""):
+                                st.download_button(
+                                    label="📄 Nhấn vào đây để tải Báo cáo PDF (Bản đẹp)",
+                                    data=pdf_response.content,
+                                    file_name=f"Ho_So_Tai_Nang_{st.session_state.session_id}.pdf",
+                                    mime="application/pdf"
+                                )
+                                # st.balloons() # Có thể bỏ qua hoặc để lại tùy ý
+                            else:
+                                st.error("Lỗi: Server không thể tạo file PDF hợp lệ.")
+                        except Exception as e:
+                            st.error(f"Lỗi khi chuẩn bị file PDF: {e}")
 
                 else:
                     st.error("Lỗi kết nối server phân tích.")

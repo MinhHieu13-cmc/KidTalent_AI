@@ -9,6 +9,10 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.output_parsers import PydanticOutputParser
 from schemas import Talent_profile
+from fastapi.responses import StreamingResponse
+import io
+from report_generator import create_talent_pdf
+import uuid
 # 1. Cấu hình & Bảo mật
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -109,6 +113,54 @@ class AnalyzeRequest(BaseModel):
     session_id: str
     child_age: int = 10
 
+
+# --- [NEW] API TẠO BÁO CÁO PDF ---
+@app.post("/report")
+async def generate_report_api(request: AnalyzeRequest):  # Tận dụng lại class AnalyzeRequest
+    session_id = request.session_id
+
+    # 1. Gọi lại hàm phân tích (Hoặc lấy từ Cache nếu xịn, nhưng giờ gọi lại cho nhanh)
+    # (Copy logic từ hàm /analyze xuống đây hoặc tách hàm ra)
+    # ĐỂ ĐƠN GIẢN HÓA CHO BẠN: Tôi sẽ gọi lại logic phân tích
+    if session_id not in user_sessions:
+        return {"error": "Không tìm thấy dữ liệu."}
+
+    memory = user_sessions[session_id]
+    history_messages = memory.messages
+    
+    # Chuyển list tin nhắn thành text để AI đọc
+    history_text = ""
+    for msg in history_messages:
+        role = "Bé" if msg.type == "human" else "Thám tử"
+        history_text += f"{role}: {msg.content}\n"
+
+    # Gọi AI phân tích (Logic cũ)
+    analysis_chain = analysis_prompt | llm | parser
+    try:
+        profile = analysis_chain.invoke({
+            "age": request.child_age,
+            "chat_history": history_text
+        })
+
+        # Chuyển đổi dữ liệu Pydantic sang Dict
+        data = profile.dict()
+        data['child_name'] = "Bé Bi"  # (Sau này lấy từ Frontend)
+        data['age'] = request.child_age
+
+        # 2. Tạo file PDF trong bộ nhớ (BytesIO)
+        pdf_buffer = io.BytesIO()
+        create_talent_pdf(pdf_buffer, data)
+        pdf_buffer.seek(0)
+
+        # 3. Trả file về cho người dùng mà không lưu xuống đĩa
+        return StreamingResponse(
+            pdf_buffer,
+            media_type='application/pdf',
+            headers={"Content-Disposition": f"attachment; filename=Ho_So_Tai_Nang_KidTalent.pdf"}
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi tạo báo cáo: {str(e)}")
 
 @app.post("/analyze")  # Không cần response_model vì nó trả về JSON động
 async def analyze_talent(request: AnalyzeRequest):

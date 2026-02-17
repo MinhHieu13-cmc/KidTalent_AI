@@ -6,3 +6,5 @@ langchain
 uvicorn
 langchain-community
 langchain-core
+reportlab
+requests
