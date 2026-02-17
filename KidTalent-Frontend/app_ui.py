@@ -9,8 +9,9 @@ st.title("🕵️‍♂️ Thám tử Gà Mơ - Khám phá Tài năng")
 st.write("Chào bạn nhỏ! Hãy kể cho Thám tử nghe về sở thích của bạn nhé!")
 
 # 2. Kết nối với Backend (QUAN TRỌNG)
-# Đây là địa chỉ của cái "Hộp Docker" bạn đã chạy hôm qua
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000/chat")
+BASE_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+CHAT_URL = f"{BASE_URL}/chat"
+ANALYZE_URL = f"{BASE_URL}/analyze"
 
 # 3. Quản lý Lịch sử Chat & Session ID
 if "session_id" not in st.session_state:
@@ -46,8 +47,7 @@ if user_input := st.chat_input("Nhập câu trả lời của bé vào đây..."
                     "user_message": user_input,
                     "child_age": 8  # Tạm để cứng, sau này có thể làm ô nhập tuổi
                 }
-
-                response = requests.post(BACKEND_URL, json=payload)
+                response = requests.post(CHAT_URL, json=payload)
 
                 if response.status_code == 200:
                     ai_reply = response.json()["ai_reply"]
@@ -61,3 +61,47 @@ if user_input := st.chat_input("Nhập câu trả lời của bé vào đây..."
             except Exception as e:
                 st.error(f"Lỗi kết nối: {e}")
                 st.info("Gợi ý: Bạn đã chạy Backend (Docker/Uvicorn) chưa?")
+
+# --- [NEW] SIDEBAR: KHU VỰC PHỤ HUYNH ---
+with st.sidebar:
+    st.header("👨‍👩‍👧‍👦 Khu vực Phụ huynh")
+    st.info("Sau khi bé trò chuyện xong, hãy bấm nút dưới đây để xem phân tích của AI.")
+
+    if st.button("🔍 Phân tích Tài năng ngay"):
+        with st.spinner("Chuyên gia đang đánh giá hồ sơ..."):
+            try:
+                payload = {
+                    "session_id": st.session_state.session_id,
+                    "child_age": 8  # (Sau này lấy từ input)
+                }
+                response = requests.post(ANALYZE_URL, json=payload)
+
+                if response.status_code == 200:
+                    data = response.json()
+
+                    if "error" in data:
+                        st.error(data["error"])
+                    else:
+                        # Hiển thị kết quả đẹp mắt
+                        st.success("Đã phân tích xong!")
+                        st.markdown("### 📊 Báo cáo Tài năng")
+
+                        st.write(f"**📝 Tóm tắt:** {data['summary']}")
+                        st.write(f"**🧠 Trí thông minh nổi trội:** {data['dominant_intelligence']}")
+
+                        st.write("**✨ Tính cách:**")
+                        for trait in data['personality_traits']:
+                            st.write(f"- {trait}")
+
+                        st.write("**🚀 Nghề nghiệp gợi ý:**")
+                        for job in data['suggested_careers']:
+                            st.write(f"- {job}")
+
+                        st.info(f"**💡 Lời khuyên:** {data['advice_for_parents']}")
+
+                        # (Ngày mai chúng ta sẽ làm nút tải PDF ở đây)
+
+                else:
+                    st.error("Lỗi kết nối server phân tích.")
+            except Exception as e:
+                st.error(f"Lỗi: {e}")

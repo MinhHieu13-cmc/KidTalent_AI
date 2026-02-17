@@ -7,7 +7,8 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
-
+from langchain_core.output_parsers import PydanticOutputParser
+from schemas import Talent_profile
 # 1. Cấu hình & Bảo mật
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -80,6 +81,74 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     ai_reply: str
 
+# --- [NEW] API PHÂN TÍCH TÀI NĂNG ---
+# 1. Tạo Parser (Bộ dịch mã để ép AI trả về JSON chuẩn)
+parser = PydanticOutputParser(pydantic_object=Talent_profile)
+# 2. Tạo Prompt chuyên dụng cho việc Phân tích
+analysis_template = """
+Bạn là Chuyên gia Tâm lý Giáo dục trẻ em.
+Nhiệm vụ của bạn là đọc lịch sử trò chuyện dưới đây giữa "Thám tử Gà Mơ" và một em bé {age} tuổi.
+Hãy phân tích kỹ lưỡng để tìm ra thiên hướng tài năng của bé.
+
+LỊCH SỬ TRÒ CHUYỆN:
+{chat_history}
+
+YÊU CẦU ĐẦU RA:
+{format_instructions}
+"""
+
+analysis_prompt = PromptTemplate(
+    template=analysis_template,
+    input_variables=["age", "chat_history"],
+    partial_variables= {"format_instructions": parser.get_format_instructions()}
+)
+
+
+# 3. Định nghĩa API Endpoint mới
+class AnalyzeRequest(BaseModel):
+    session_id: str
+    child_age: int = 10
+
+
+@app.post("/analyze")  # Không cần response_model vì nó trả về JSON động
+async def analyze_talent(request: AnalyzeRequest):
+    session_id = request.session_id
+
+    # Kiểm tra xem bé này có lịch sử chat chưa
+    if session_id not in user_sessions:
+        return {"error": "Chưa có dữ liệu trò chuyện nào để phân tích!"}
+
+    # Lấy toàn bộ lịch sử chat từ bộ nhớ
+    memory = user_sessions[session_id]
+    history_messages = memory.messages
+    
+    # Chuyển list tin nhắn thành text để AI đọc
+    history_text = ""
+    for msg in history_messages:
+        role = "Bé" if msg.type == "human" else "Thám tử"
+        history_text += f"{role}: {msg.content}\n"
+
+    if not history_text.strip():
+        return {"error": "Cuộc trò chuyện quá ngắn, chưa đủ dữ liệu phân tích."}
+
+    print(f"--- Đang phân tích hồ sơ bé {session_id} ---")
+
+    # Tạo Chain phân tích
+    analysis_chain = analysis_prompt | llm | parser
+
+    try:
+        # Gọi AI thực hiện phân tích
+        result = analysis_chain.invoke({
+            "age": request.child_age,
+            "chat_history": history_text
+        })
+
+        # Kết quả 'result' lúc này đã là một object Python (TalentProfile)
+        # Chúng ta chuyển nó thành JSON (dict) để trả về cho Frontend
+        return result.dict()
+
+    except Exception as e:
+        return {"error": f"Lỗi phân tích: {str(e)}"}
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_with_memory(request: ChatRequest):
